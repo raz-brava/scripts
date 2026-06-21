@@ -30,12 +30,23 @@ can't export back to its parent. For those, `source` it and run `buzz ...`.
 
 ## Configure
 
-Edit the two variables at the top of `buzz.zsh` to match your AWS profile names:
+Edit the two variables at the top of `aws.zsh` to match your AWS profile names:
 
 ```zsh
 BUZZ_PROD_PROFILE="prod-admin"
 BUZZ_DEV_PROFILE="dev-profile"
 ```
+
+## Layout
+
+The code is split by category. `buzz.zsh` is the entry point — it sources the
+sibling files (so keep them together) and dispatches:
+
+| File | Responsibility |
+|------|----------------|
+| `buzz.zsh` | Loader + `buzz` dispatcher + `--help`. Source this one. |
+| `aws.zsh`  | `aws` profile switching and `eks` kube-context selection. |
+| `gh.zsh`   | `gh` GitHub helpers (`running-actions` / `ra`). |
 
 ## Usage
 
