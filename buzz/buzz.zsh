@@ -1,3 +1,4 @@
+#!/usr/bin/env zsh
 # buzz - personal CLI for AWS profile + EKS context switching
 #
 # Install: add this line to ~/.zshrc
@@ -6,7 +7,11 @@
 #
 # It's a shell function (not a standalone script) on purpose: `buzz aws prod`
 # needs to `export AWS_PROFILE` into your *current* shell, which a child
-# process can't do.
+# process can't do. So `source` it and run `buzz ...`.
+#
+# You CAN also run it directly (`./buzz.zsh gh ra owner/repo`) — handy for the
+# 'gh' subcommands, which are plain subprocesses. Note that 'aws'/'eks' won't
+# persist into your shell when run this way, since a child can't export to it.
 
 # --- config (edit to taste) ---
 BUZZ_PROD_PROFILE="prod-admin"
@@ -17,14 +22,19 @@ _buzz_usage() {
 buzz - personal AWS/EKS switcher
 
 Usage:
-  buzz aws prod            export AWS_PROFILE=prod-admin
-  buzz aws dev             export AWS_PROFILE=dev-profile
-  buzz eks prod <region>   point kubeconfig at the prod cluster in <region>
-  buzz eks dev  <region>   point kubeconfig at the dev cluster in <region>
-  buzz help                show this help
+  buzz aws prod                          export AWS_PROFILE=prod-admin
+  buzz aws dev                           export AWS_PROFILE=dev-profile
+  buzz eks prod <region>                 point kubeconfig at the prod cluster in <region>
+  buzz eks dev  <region>                 point kubeconfig at the dev cluster in <region>
+  buzz gh running-actions <owner/repo>   list in-progress GitHub Actions runs
+  buzz gh ra <owner/repo>                alias for 'gh running-actions'
+  buzz help                              show this help
 
 For eks, clusters are discovered from AWS. If a region has more than one
 cluster you'll be prompted to pick; a single cluster is selected automatically.
+
+For gh running-actions, add '--watch [interval]' to poll until idle
+(default interval: 20s). Requires the 'gh' and 'jq' CLIs.
 EOF
 }
 
@@ -36,6 +46,55 @@ _buzz_profile_for() {
     dev)  echo "$BUZZ_DEV_PROFILE" ;;
     *)    return 1 ;;
   esac
+}
+
+# Print the active (in_progress/queued/pending) Actions runs for a repo.
+# Returns 0 when idle, 1 when one or more runs are active.
+_buzz_gh_running_actions_once() {
+  local repo="$1" active count
+  active=$(gh run list --repo "$repo" --limit 30 \
+    --json status,name,headBranch,event,databaseId \
+    | jq -c '[.[] | select(.status=="in_progress" or .status=="queued" or .status=="pending")]') || return 2
+
+  count=$(echo "$active" | jq 'length')
+  if [ "$count" -eq 0 ]; then
+    echo "[$repo] idle — no actions running."
+    return 0
+  fi
+
+  echo "[$repo] $count action(s) running:"
+  echo "$active" | jq -r '.[] | "  - \(.name) (\(.headBranch), \(.event)) [\(.status)] #\(.databaseId)"'
+  return 1
+}
+
+# buzz gh running-actions <owner/repo> [--watch [interval]]
+_buzz_gh_running_actions() {
+  local repo="$1"
+  if [ -z "$repo" ]; then
+    echo "buzz: gh running-actions requires a repo, e.g. 'buzz gh ra Brava-Security/frontend'" >&2
+    return 2
+  fi
+
+  local watch=false interval=20
+  if [ "${2:-}" = "--watch" ]; then
+    watch=true
+    [ -n "${3:-}" ] && interval="$3"
+  fi
+
+  command -v gh >/dev/null 2>&1 || { echo "buzz: gh CLI not found" >&2; return 2; }
+  command -v jq >/dev/null 2>&1 || { echo "buzz: jq not found" >&2; return 2; }
+
+  if ! $watch; then
+    _buzz_gh_running_actions_once "$repo"
+    return $?
+  fi
+
+  while true; do
+    if _buzz_gh_running_actions_once "$repo"; then
+      return 0
+    fi
+    sleep "$interval"
+  done
 }
 
 buzz() {
@@ -85,7 +144,7 @@ buzz() {
         done
         local choice
         read "choice?Select cluster [1-$n]: "
-        if [[ "$choice" != <-> ]] || (( choice < 1 || choice > n )); then
+        if [[ ! "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > n )); then
           echo "buzz: invalid selection '${choice}'" >&2
           return 1
         fi
@@ -96,6 +155,25 @@ buzz() {
       aws eks update-kubeconfig --name "$cluster" --region "$region" --profile "$profile" || return $?
       export AWS_PROFILE="$profile"
       echo "✓ AWS_PROFILE=$AWS_PROFILE, kube context set to $cluster"
+      ;;
+
+    gh)
+      local sub="$2"
+      case "$sub" in
+        running-actions|ra)
+          _buzz_gh_running_actions "$3" "${@:4}"
+          return $?
+          ;;
+        ""|help|-h|--help)
+          _buzz_usage >&2
+          return 1
+          ;;
+        *)
+          echo "buzz: unknown gh command '$sub' (expected running-actions|ra)" >&2
+          _buzz_usage >&2
+          return 1
+          ;;
+      esac
       ;;
 
     ""|help|-h|--help)
@@ -109,3 +187,9 @@ buzz() {
       ;;
   esac
 }
+
+# When executed directly (not sourced), dispatch to buzz with the given args.
+# A sourced context ends in ':file'; direct execution is plain 'toplevel'.
+if [[ "$ZSH_EVAL_CONTEXT" != *file ]]; then
+  buzz "$@"
+fi
