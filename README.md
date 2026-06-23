@@ -10,6 +10,7 @@ it does and how to use it.
 | Tool | Description |
 |------|-------------|
 | [`buzz/`](buzz/) | Personal AWS profile + EKS context switcher (zsh shell function). |
+| [`s3-batch-copy/`](s3-batch-copy/) | Copy objects between S3 buckets — a configurable `aws s3control create-job` wrapper for same-account batch jobs, plus a cross-account streaming mirror (Python). |
 
 ## Conventions
 
