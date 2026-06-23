@@ -29,13 +29,15 @@ _buzz_usage() {
 buzz - personal AWS/EKS switcher
 
 Usage:
-  buzz aws prod                          export AWS_PROFILE=prod-admin
-  buzz aws dev                           export AWS_PROFILE=dev-profile
-  buzz eks prod <region>                 point kubeconfig at the prod cluster in <region>
-  buzz eks dev  <region>                 point kubeconfig at the dev cluster in <region>
+  buzz aws [profile]                     export AWS_PROFILE (picker if omitted)
+  buzz eks <region>                      pick a profile, then point kubeconfig at its cluster
+  buzz eks <profile> <region>            same, with the profile given up front
   buzz gh running-actions <owner/repo>   list in-progress GitHub Actions runs
   buzz gh ra <owner/repo>                alias for 'gh running-actions'
   buzz help                              show this help
+
+Profiles are discovered from ~/.aws (config + credentials). With no/unknown
+profile you're prompted to pick one; a single profile is selected automatically.
 
 For eks, clusters are discovered from AWS. If a region has more than one
 cluster you'll be prompted to pick; a single cluster is selected automatically.
@@ -49,7 +51,7 @@ buzz() {
   local group="$1"
   case "$group" in
     aws) _buzz_aws "$2" ;;
-    eks) _buzz_eks "$2" "$3" ;;
+    eks) _buzz_eks "${@:2}" ;;
     gh)  _buzz_gh "${@:2}" ;;
 
     ""|help|-h|--help)

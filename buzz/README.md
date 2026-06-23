@@ -30,12 +30,9 @@ can't export back to its parent. For those, `source` it and run `buzz ...`.
 
 ## Configure
 
-Edit the two variables at the top of `aws.zsh` to match your AWS profile names:
-
-```zsh
-BUZZ_PROD_PROFILE="prod-admin"
-BUZZ_DEV_PROFILE="dev-profile"
-```
+Nothing to configure. Profiles are discovered dynamically from your `~/.aws`
+files (`config` + `credentials`) via `aws configure list-profiles`, so `buzz`
+works with whatever profiles you already have.
 
 ## Layout
 
@@ -51,10 +48,9 @@ sibling files (so keep them together) and dispatches:
 ## Usage
 
 ```
-buzz aws prod                          export AWS_PROFILE=prod-admin
-buzz aws dev                           export AWS_PROFILE=dev-profile
-buzz eks prod <region>                 point kubeconfig at the prod cluster in <region>
-buzz eks dev  <region>                 point kubeconfig at the dev cluster in <region>
+buzz aws [profile]                     export AWS_PROFILE (picker if omitted)
+buzz eks <region>                      pick a profile, then set kubeconfig for its cluster
+buzz eks <profile> <region>            same, with the profile given up front
 buzz gh running-actions <owner/repo>   list in-progress GitHub Actions runs
 buzz gh ra <owner/repo>                alias for 'gh running-actions'
 buzz help                              show help
@@ -62,13 +58,18 @@ buzz help                              show help
 
 ### AWS profile switching
 
-`buzz aws prod` / `buzz aws dev` simply export `AWS_PROFILE` for the mapped
-profile and print a confirmation.
+Profiles are discovered from `~/.aws` (via `aws configure list-profiles`).
+`buzz aws <profile>` exports `AWS_PROFILE` for that profile and prints a
+confirmation. If you omit the profile (or name one that doesn't exist), `buzz`
+lists the discovered profiles and prompts you to pick — except when there's
+exactly one, which is selected automatically.
 
 ### EKS context switching
 
-`buzz eks <env> <region>` discovers the EKS clusters in that region/account via
-`aws eks list-clusters`, then:
+`buzz eks <region>` picks a profile (same logic as `buzz aws`) and then
+discovers the EKS clusters in that region/account via `aws eks list-clusters`.
+Pass the profile up front with `buzz eks <profile> <region>` to skip the
+prompt. Once a profile is chosen, it:
 
 - if exactly **one** cluster is found, it's selected automatically;
 - if **several** are found, you're prompted to pick one;
@@ -102,6 +103,6 @@ buzz gh ra Brava-Security/frontend --watch 30
 ## Requirements
 
 - `zsh`
-- AWS CLI v2, configured with the profiles referenced above (for `aws`/`eks`)
+- AWS CLI v2, with one or more profiles configured in `~/.aws` (for `aws`/`eks`)
 - `kubectl` (to actually use the kube-context that gets set)
 - `gh` (GitHub CLI, authenticated) and `jq` (for `gh running-actions`)
